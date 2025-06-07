@@ -1,103 +1,148 @@
-import Image from "next/image";
+// app/page.js
+
+"use client";
+
+import React, { useRef, useMemo, useState, useCallback } from 'react';
+import { useWidgetStore } from '@/hooks/useWidgetStore';
+import { useHasHydrated } from '@/hooks/useHasHydrated';
+import Sidebar from "@/components/Layout/Sidebar";
+import Header from "@/components/Layout/Header";
+import MainContent from "@/components/Layout/MainContent";
+import Footer from "@/components/Layout/Footer";
+import FloatingWidget from '@/components/Widgets/FloatingWidget';
+import { QuickTradeHeader, QuickTradeBody } from '@/components/Widgets/QuickTradeContent';
+import { IoClose } from "react-icons/io5";
+
+const sortWidgets = (a, b) => (a.order || 0) - (b.order || 0);
+const UNDOCK_THRESHOLD = 30;
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.js
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const hasHydrated = useHasHydrated();
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  const {
+    widgets, toggleWidget, handleDragStop,
+    prepareUndock, dockPreview, handleWidgetDrag,
+    handleResizeStop
+  } = useWidgetStore();
+
+  const getWidgetContent = useCallback((widgetId, onClose) => {
+    const customHeader = (
+      <div className="flex justify-between items-center text-white w-full">
+        <span className="font-bold text-sm">{widgetId}</span>
+        <button
+          onClick={onClose}
+          className="p-1 rounded-full hover:bg-white/10 transition-colors"
+          aria-label="Close Widget"
+        >
+          <IoClose className="w-4 h-4 text-[#686F83]" />
+        </button>
+      </div>
+    );
+
+    switch (widgetId) {
+      case 'widget3':
+        return {
+          header: <QuickTradeHeader />,
+          body: <QuickTradeBody onClose={onClose} />,
+        };
+      default:
+        return { header: customHeader, body: <div className="p-4">Content for {widgetId}</div> };
+    }
+  }, []);
+
+  const [leftDocked, rightDocked, floatingWidgets] = useMemo(() => {
+    if (!hasHydrated) return [[], [], []];
+
+    const allWidgets = Object.values(widgets);
+    const left = allWidgets.filter(w => w.status === 'docked-left').sort(sortWidgets);
+    const right = allWidgets.filter(w => w.status === 'docked-right').sort(sortWidgets);
+    const floating = allWidgets.filter(w => w.status === 'floating');
+    return [left, right, floating];
+  }, [widgets, hasHydrated]);
+
+  const [dragInitiation, setDragInitiation] = useState(null);
+  const mainContentRef = useRef(null);
+  const pageContainerRef = useRef(null);
+
+  const handleUndockInitiation = useCallback((id, side, mousedownEvent) => {
+    if (!pageContainerRef.current) return;
+
+    const handleElement = mousedownEvent.currentTarget;
+    const pageRect = pageContainerRef.current.getBoundingClientRect();
+    const initialX = mousedownEvent.clientX;
+    const initialY = mousedownEvent.clientY;
+
+    const handleMouseMove = (moveEvent) => {
+      const deltaX = moveEvent.clientX - initialX;
+      const deltaY = moveEvent.clientY - initialY;
+      const distance = Math.sqrt(deltaX ** 2 + deltaY ** 2);
+
+      if (distance > UNDOCK_THRESHOLD) {
+        window.removeEventListener('mousemove', handleMouseMove);
+        window.removeEventListener('mouseup', handleMouseUp);
+
+        const handleRect = handleElement.getBoundingClientRect();
+        const handleOffsetX = mousedownEvent.clientX - handleRect.left;
+        const handleOffsetY = mousedownEvent.clientY - handleRect.top;
+        const x = mousedownEvent.clientX - pageRect.left - handleOffsetX;
+        const y = mousedownEvent.clientY - pageRect.top - handleOffsetY;
+
+        if (prepareUndock(id, { x, y })) {
+          setDragInitiation({ widgetId: id, event: mousedownEvent });
+        }
+      }
+    };
+    const handleMouseUp = () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  }, [prepareUndock, pageContainerRef]);
+
+  if (!hasHydrated) {
+    return null;
+  }
+
+  return (
+    <div ref={pageContainerRef} className="min-h-screen bg-[#0b0b11] text-gray-300 p-2.5 font-sans flex gap-1.5 relative">
+      <Sidebar />
+      <div className="flex-1 flex flex-col gap-2">
+        <div className="flex-1 flex flex-col gap-1">
+          <Header />
+          <MainContent
+            mainContentRef={mainContentRef}
+            leftDocked={leftDocked}
+            rightDocked={rightDocked}
+            dockPreview={dockPreview}
+            prepareUndock={handleUndockInitiation}
+            toggleWidget={toggleWidget}
+            widgets={widgets}
+            getWidgetContent={getWidgetContent}
+          />
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+        <Footer />
+      </div>
+
+      {floatingWidgets.map((widget) => {
+        const { header, body } = getWidgetContent(widget.id, () => toggleWidget(widget.id));
+        return (
+          <FloatingWidget
+            key={widget.id}
+            widget={widget}
+            onDragStop={(id, d) => handleDragStop(id, d)}
+            onDrag={(id, d) => handleWidgetDrag(id, d, widget, mainContentRef.current)}
+            onResizeStop={(id, ref, pos) => handleResizeStop(id, { width: ref.offsetWidth, height: ref.offsetHeight }, pos)}
+            onClose={() => toggleWidget(widget.id)}
+            dragInitiation={dragInitiation}
+            onDragInitiationComplete={() => setDragInitiation(null)}
+            headerContent={header}
+          >
+            {body}
+          </FloatingWidget>
+        );
+      })}
     </div>
   );
 }

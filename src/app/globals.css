@@ -1,8 +1,18 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: 'Clash Grotesk Variable';
+  src: url('/public/fonts/ClashGrotesk-Variable.woff2') format('woff2');
+  font-weight: 200 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  --font-clash-grotesk: 'Clash Grotesk Variable', sans-serif;
 }
 
 @theme inline {
@@ -10,6 +20,9 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  --font-a: var(--font-dm-mono);
+  --font-b: var(--font-clash-grotesk);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -19,8 +32,28 @@
   }
 }
 
+html, body {
+  overflow: hidden;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+@keyframes dock-preview-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-dock-preview {
+  animation: dock-preview-enter 250ms ease-out forwards;
 }

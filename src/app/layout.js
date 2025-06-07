@@ -1,5 +1,13 @@
 import { Geist, Geist_Mono } from "next/font/google";
+import { DM_Mono } from 'next/font/google';
+
 import "./globals.css";
+
+const dmMono = DM_Mono({
+  subsets: ['latin'],
+  variable: '--font-dm-mono',
+  weight: ['300', '400', '500',],
+});
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -20,7 +28,12 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`
+          ${geistSans.variable} 
+          ${geistMono.variable} 
+          ${dmMono.variable} 
+          antialiased
+        `}
       >
         {children}
       </body>
